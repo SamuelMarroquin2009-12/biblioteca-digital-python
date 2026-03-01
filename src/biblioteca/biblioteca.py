@@ -1,41 +1,12 @@
-"""
-Módulo que define la clase Biblioteca (coordinador principal).
-
-TODO (Principiantes - Pasos 3 y 4):
-- Implementar registrar_libro() y registrar_usuario()
-- Implementar prestar() y devolver()
-
-TODO (Avanzados - Pasos 1-4):
-- Mantener índices por autor y género
-- Implementar búsquedas
-- Implementar reportes
-"""
 from datetime import datetime
-
+from collections import Counter
 from src.biblioteca.libro import Libro
 from src.biblioteca.usuario import Usuario
 from src.biblioteca.prestamo import Prestamo
 
 
 class Biblioteca:
-    """Coordinador del catálogo, usuarios, préstamos e índices de búsqueda."""
-
     def __init__(self) -> None:
-        """
-        Inicializa la biblioteca con estructuras de datos vacías.
-
-        Estructuras principales:
-        - catalogo: dict[str, Libro] - Diccionario de libros por id_libro
-        - usuarios: dict[str, Usuario] - Diccionario de usuarios por id_usuario
-        - prestamos_activos: list[Prestamo] - Lista de préstamos no devueltos
-
-        Estructuras para búsqueda (Avanzados):
-        - indice_por_autor: dict[str, list[str]] - IDs de libros por autor
-        - indice_por_genero: dict[str, list[str]] - IDs de libros por género
-
-        Estructura para historial:
-        - historial_prestamos: dict[str, list[str]] - Eventos por id_usuario
-        """
         self.catalogo: dict[str, Libro] = {}
         self.usuarios: dict[str, Usuario] = {}
         self.prestamos_activos: list[Prestamo] = []
@@ -43,241 +14,84 @@ class Biblioteca:
         self.indice_por_genero: dict[str, list[str]] = {}
         self.historial_prestamos: dict[str, list[str]] = {}
 
-    # =========================================================================
-    # MÉTODOS DE REGISTRO (Principiantes - Paso 3)
-    # =========================================================================
-
+    # --- REGISTRO ---
     def registrar_libro(self, libro: Libro) -> None:
-        """
-        Registra un libro en el catálogo.
-
-        TODO:
-        1. Verificar que el id_libro no exista ya en self.catalogo.
-           Si existe, lanzar ValueError("El id_libro ya existe.")
-        2. Agregar el libro al diccionario self.catalogo usando id_libro como clave.
-
-        TODO (Avanzados - Paso 1):
-        3. Agregar el id_libro a self.indice_por_autor[libro.autor]
-        4. Agregar el id_libro a self.indice_por_genero[libro.genero]
-
-        Pista: Usa dict.setdefault(clave, []).append(valor) para los índices.
-
-        Args:
-            libro: Instancia de Libro a registrar
-
-        Raises:
-            ValueError: Si el id_libro ya está registrado
-        """
-        pass  # TODO: Implementar
+        if libro.id_libro in self.catalogo:
+            raise ValueError("El id_libro ya existe.")
+        self.catalogo[libro.id_libro] = libro
+        # Lógica para índices (Avanzado) - NECESARIO PARA TEST_BUSQUEDAS
+        self.indice_por_autor.setdefault(libro.autor, []).append(libro.id_libro)
+        self.indice_por_genero.setdefault(libro.genero, []).append(libro.id_libro)
 
     def registrar_usuario(self, usuario: Usuario) -> None:
-        """
-        Registra un usuario en el sistema.
+        if usuario.id_usuario in self.usuarios:
+            raise ValueError("El id_usuario ya existe.")
+        self.usuarios[usuario.id_usuario] = usuario
 
-        TODO:
-        1. Verificar que el id_usuario no exista ya en self.usuarios.
-           Si existe, lanzar ValueError("El id_usuario ya existe.")
-        2. Agregar el usuario al diccionario self.usuarios usando id_usuario como clave.
-
-        Args:
-            usuario: Instancia de Usuario a registrar
-
-        Raises:
-            ValueError: Si el id_usuario ya está registrado
-        """
-        pass  # TODO: Implementar
-
-    # =========================================================================
-    # OPERACIONES DE NEGOCIO (Principiantes - Paso 4)
-    # =========================================================================
-
+    # --- NEGOCIO ---
     def prestar(self, id_usuario: str, id_libro: str) -> str:
-        """
-        Realiza el préstamo de un libro a un usuario.
+        if id_usuario not in self.usuarios: raise ValueError("Usuario no existe.")
+        if id_libro not in self.catalogo: raise ValueError("Libro no existe.")
 
-        TODO:
-        1. Validar que id_usuario exista en self.usuarios.
-           Si no existe, lanzar ValueError("Usuario no existe.")
-        2. Validar que id_libro exista en self.catalogo.
-           Si no existe, lanzar ValueError("Libro no existe.")
-        3. Si el libro ya está prestado (libro.prestado == True),
-           retornar "El libro ya está prestado."
-        4. Si el usuario no puede prestar más (usuario.puede_prestar() == False),
-           retornar "El usuario no tiene cupo disponible."
-        5. Marcar el libro como prestado (libro.prestado = True).
-        6. Crear un nuevo Prestamo con un ID único (ej: "P001", "P002", ...).
-           Pista: f"P{len(self.prestamos_activos)+1:03d}" genera "P001", "P002", etc.
-        7. Agregar el préstamo a usuario.prestamos y a self.prestamos_activos.
-        8. Registrar el evento en el historial (opcional pero recomendado).
-        9. Retornar f"Préstamo concedido (id={id_prestamo})."
+        u, l = self.usuarios[id_usuario], self.catalogo[id_libro]
+        if l.prestado: return "El libro ya está prestado."
+        if not u.puede_prestar: return "El usuario no tiene cupo disponible."
 
-        Args:
-            id_usuario: ID del usuario que solicita el préstamo
-            id_libro: ID del libro a prestar
+        l.prestado = True
+        id_p = f"P{len(self.prestamos_activos) + 1:03d}"
+        p = Prestamo(id_p, id_libro, id_usuario)
+        u.prestamos.append(p)
+        self.prestamos_activos.append(p)
 
-        Returns:
-            Mensaje indicando el resultado de la operación
-
-        Raises:
-            ValueError: Si el usuario o libro no existen
-        """
-        pass  # TODO: Implementar
+        # Guardar en historial para reportes
+        self._registrar_evento(id_usuario, f"Prestado: {l.titulo}")
+        return f"Préstamo concedido (id={id_p})."
 
     def devolver(self, id_prestamo: str) -> str:
-        """
-        Registra la devolución de un préstamo.
+        p = next((p for p in self.prestamos_activos if p.id_prestamo == id_prestamo), None)
+        if not p: return "No se encontró el préstamo activo."
 
-        TODO:
-        1. Buscar el préstamo en self.prestamos_activos por id_prestamo.
-        2. Si no se encuentra, retornar "No se encontró el préstamo activo."
-        3. Si se encuentra:
-           a. Llamar a prestamo.marcar_devuelto()
-           b. Marcar el libro como no prestado (libro.prestado = False)
-           c. Remover el préstamo de self.prestamos_activos
-           d. Registrar el evento en el historial (opcional)
-           e. Retornar "Devolución registrada."
+        p.marcar_devuelto()
+        self.catalogo[p.id_libro].prestado = False
+        self.prestamos_activos.remove(p)
+        self._registrar_evento(p.id_usuario, f"Devuelto: {self.catalogo[p.id_libro].titulo}")
+        return "Devolución registrada."
 
-        Args:
-            id_prestamo: ID del préstamo a devolver
-
-        Returns:
-            Mensaje indicando el resultado de la operación
-        """
-        pass  # TODO: Implementar
-
-    # =========================================================================
-    # BÚSQUEDAS (Avanzados - Paso 2)
-    # =========================================================================
-
+    # --- BÚSQUEDAS (Soluciona AttributeError: buscar_por_...) ---
     def buscar_por_autor(self, autor: str) -> list[Libro]:
-        """
-        Busca libros por nombre de autor.
-
-        TODO:
-        1. Obtener la lista de IDs desde self.indice_por_autor.get(autor, [])
-        2. Convertir los IDs a objetos Libro y retornarlos.
-
-        Args:
-            autor: Nombre del autor a buscar
-
-        Returns:
-            Lista de libros del autor (puede estar vacía)
-        """
-        pass  # TODO: Implementar
+        ids = self.indice_por_autor.get(autor, [])
+        return [self.catalogo[idx] for idx in ids]
 
     def buscar_por_genero(self, genero: str) -> list[Libro]:
-        """
-        Busca libros por género.
-
-        TODO:
-        1. Obtener la lista de IDs desde self.indice_por_genero.get(genero, [])
-        2. Convertir los IDs a objetos Libro y retornarlos.
-
-        Args:
-            genero: Género a buscar
-
-        Returns:
-            Lista de libros del género (puede estar vacía)
-        """
-        pass  # TODO: Implementar
+        ids = self.indice_por_genero.get(genero, [])
+        return [self.catalogo[idx] for idx in ids]
 
     def buscar_por_titulo(self, texto: str) -> list[Libro]:
-        """
-        Busca libros cuyo título contenga el texto dado (case-insensitive).
+        t = texto.lower()
+        return [l for l in self.catalogo.values() if t in l.titulo.lower()]
 
-        TODO:
-        1. Convertir el texto de búsqueda a minúsculas.
-        2. Filtrar self.catalogo.values() buscando libros cuyo título
-           (en minúsculas) contenga el texto.
-
-        Pista: Usa una list comprehension con 'in' para verificar substring.
-
-        Args:
-            texto: Texto a buscar en los títulos
-
-        Returns:
-            Lista de libros que coinciden (puede estar vacía)
-        """
-        pass  # TODO: Implementar
-
-    # =========================================================================
-    # REPORTES (Avanzados - Paso 4)
-    # =========================================================================
-
-    def top_autores_mas_prestados(self, k: int = 3) -> list[tuple]:
-        """
-        Retorna los k autores con más préstamos en el historial.
-
-        TODO:
-        1. Recorrer self.historial_prestamos para contar préstamos por autor.
-        2. Los eventos de préstamo contienen "Prestado: {titulo}".
-        3. Usar el título para encontrar el autor en self.catalogo.
-        4. Retornar los k autores más frecuentes como lista de tuplas (autor, cantidad).
-
-        Pista: Usa collections.Counter para contar y su método most_common(k).
-
-        Args:
-            k: Cantidad de autores a retornar (default: 3)
-
-        Returns:
-            Lista de tuplas (autor, cantidad) ordenada de mayor a menor
-        """
-        pass  # TODO: Implementar
-
+    # --- REPORTES (Soluciona AttributeError: disponibles_por_genero, etc.) ---
     def disponibles_por_genero(self) -> dict[str, int]:
-        """
-        Cuenta libros disponibles (no prestados) por género.
-
-        TODO:
-        1. Para cada género en self.indice_por_genero:
-        2. Contar cuántos de sus libros tienen prestado=False.
-        3. Retornar diccionario {género: cantidad_disponibles}.
-
-        Returns:
-            Diccionario con cantidad de libros disponibles por género
-        """
-        pass  # TODO: Implementar
+        res = {}
+        for gen, ids in self.indice_por_genero.items():
+            res[gen] = sum(1 for idx in ids if not self.catalogo[idx].prestado)
+        return res
 
     def prestamos_activos_por_usuario(self) -> dict[str, int]:
-        """
-        Cuenta préstamos activos por usuario.
+        res = {u_id: 0 for u_id in self.usuarios}
+        for p in self.prestamos_activos:
+            res[p.id_usuario] += 1
+        return res
 
-        TODO:
-        1. Crear un diccionario con todos los id_usuario inicializados en 0.
-        2. Recorrer self.prestamos_activos y sumar 1 por cada préstamo.
-        3. Retornar el diccionario {id_usuario: cantidad_activos}.
-
-        Returns:
-            Diccionario con cantidad de préstamos activos por usuario
-        """
-        pass  # TODO: Implementar
-
-    # =========================================================================
-    # UTILIDADES INTERNAS (Opcional - pueden ser útiles)
-    # =========================================================================
+    def top_autores_mas_prestados(self, k: int = 3) -> list[tuple]:
+        autores = []
+        for eventos in self.historial_prestamos.values():
+            for ev in eventos:
+                if "Prestado:" in ev:
+                    tit = ev.split("Prestado: ")[1]
+                    for l in self.catalogo.values():
+                        if l.titulo == tit: autores.append(l.autor)
+        return Counter(autores).most_common(k)
 
     def _registrar_evento(self, id_usuario: str, evento: str) -> None:
-        """
-        Registra un evento en el historial de un usuario.
-
-        Uso sugerido:
-        self._registrar_evento(id_usuario, f"{datetime.now().date()} - Prestado: {titulo}")
-        self._registrar_evento(id_usuario, f"{datetime.now().date()} - Devuelto: {titulo}")
-
-        Args:
-            id_usuario: ID del usuario
-            evento: Descripción del evento
-        """
-        self.historial_prestamos.setdefault(id_usuario, []).append(evento)
-
-    def _ids_a_libros(self, ids: list[str]) -> list[Libro]:
-        """
-        Convierte una lista de IDs a una lista de objetos Libro.
-
-        Args:
-            ids: Lista de id_libro
-
-        Returns:
-            Lista de objetos Libro correspondientes
-        """
-        return [self.catalogo[i] for i in ids if i in self.catalogo]
+        self.historial_prestamos.setdefault(id_usuario, []).append(f"{datetime.now().date()} - {evento}")
